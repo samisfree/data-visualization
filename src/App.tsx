@@ -1,5 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Upload, User } from 'lucide-react'
+import { useState, ChangeEvent } from 'react'
+import { read, utils } from 'xlsx'
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -10,16 +12,79 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 
-// Sample data for the line chart
-const data = [
-  { name: 'Jan', value: 400 },
-  { name: 'Feb', value: 300 },
-  { name: 'Mar', value: 600 },
-  { name: 'Apr', value: 200 },
-  { name: 'May', value: 500 },
-]
+interface ExcelRow {
+  [key: string]: string | number | Date
+}
+
+interface ChartData {
+  name: string
+  [key: string]: string | number
+}
 
 function App() {
+  const [data, setData] = useState<ChartData[]>([])
+
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.xlsx')) {
+      alert('Please upload an Excel (.xlsx) file')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e: ProgressEvent<FileReader>) => {
+      try {
+        const result = e.target?.result
+        if (!result || typeof result !== 'object') {
+          throw new Error('Invalid file content')
+        }
+
+        const workbook = read(result, { type: 'array' })
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+        const jsonData = utils.sheet_to_json<ExcelRow>(firstSheet)
+
+        if (!jsonData || jsonData.length === 0) {
+          alert('Excel file is empty')
+          return
+        }
+
+        // Get column names and identify numerical columns
+        const columns = Object.keys(jsonData[0])
+        const firstColumn = columns[0]
+        const numericalColumns = columns.filter(col =>
+          typeof jsonData[0][col] === 'number'
+        )
+
+        if (numericalColumns.length === 0) {
+          alert('No numerical columns found in Excel file')
+          return
+        }
+
+        // Transform data for chart
+        const chartData = jsonData.map(row => ({
+          name: String(row[firstColumn]),
+          ...numericalColumns.reduce((acc, col) => ({
+            ...acc,
+            [col]: Number(row[col])
+          }), {})
+        }))
+
+        setData(chartData)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        alert('Error parsing Excel file: ' + message)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const handleUploadClick = () => {
+    const input = document.getElementById('excel-upload') as HTMLInputElement
+    input?.click()
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <nav className="border-b p-4">
@@ -57,7 +122,17 @@ function App() {
                   <XAxis dataKey="name" />
                   <YAxis />
                   <Tooltip />
-                  <Line type="monotone" dataKey="value" stroke="#8884d8" />
+                  {Object.keys(data[0] || {})
+                    .filter(key => key !== 'name')
+                    .map((key, index) => (
+                      <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        name={key}
+                        stroke={['#3B82F6', '#22C55E', '#F97316', '#A855F7'][index]}
+                      />
+                    ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -69,7 +144,19 @@ function App() {
             <Upload className="h-12 w-12 text-blue-500 mb-4" />
             <h2 className="text-xl font-semibold mb-2">Upload Excel</h2>
             <p className="text-gray-500 mb-4">Upload your excel. Your excel will generate charts</p>
-            <Button className="bg-blue-500 hover:bg-blue-600">Upload Excel</Button>
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+              id="excel-upload"
+            />
+            <Button
+              className="bg-blue-500 hover:bg-blue-600"
+              onClick={handleUploadClick}
+            >
+              Upload Excel
+            </Button>
           </Card>
 
           <Card className="mt-6 p-6">

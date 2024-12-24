@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Upload, User } from 'lucide-react'
 import { useState, ChangeEvent } from 'react'
 import { read, utils } from 'xlsx'
@@ -23,6 +23,7 @@ interface ChartData {
 
 function App() {
   const [data, setData] = useState<ChartData[]>([])
+  const [numericalColumns, setNumericalColumns] = useState<string[]>([])
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -50,28 +51,65 @@ function App() {
           return
         }
 
-        // Get column names and identify numerical columns
         const columns = Object.keys(jsonData[0])
+        console.log('All columns:', columns)
         const firstColumn = columns[0]
-        const numericalColumns = columns.filter(col =>
-          typeof jsonData[0][col] === 'number'
-        )
 
-        if (numericalColumns.length === 0) {
+        const isDateColumn = (col: string) => {
+          const values = jsonData.map(row => row[col])
+          console.log(`Checking if ${col} is a date column. Values:`, values)
+
+          // Check if values are sequential numbers AND in Excel date range (typically > 40000)
+          const isSequential = values.every((val, i, arr) => {
+            if (i === 0) return true
+            const diff = Number(val) - Number(arr[i - 1])
+            const isSeq = !isNaN(diff) && diff === 1
+            console.log(`${col}: diff between ${val} and ${arr[i-1]} is ${diff}, isSequential: ${isSeq}`)
+            return isSeq
+          })
+
+          // Check if values are in Excel date range (typically > 40000)
+          const isInDateRange = values.every(val => Number(val) > 40000)
+
+          const isDate = isSequential && isInDateRange
+          console.log(`${col}: isSequential: ${isSequential}, isInDateRange: ${isInDateRange}, final isDate: ${isDate}`)
+          return isDate
+        }
+
+        const detectedNumericalColumns = columns.filter(col => {
+          if (col === '出生日期' || isDateColumn(col)) {
+            console.log(`${col} excluded: date column`)
+            return false
+          }
+          const value = jsonData[0][col]
+          const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
+          console.log(`${col}: first value ${value}, type ${typeof value}, isNumeric: ${isNumeric}`)
+          return isNumeric
+        })
+
+        if (detectedNumericalColumns.length === 0) {
           alert('No numerical columns found in Excel file')
           return
         }
 
-        // Transform data for chart
-        const chartData = jsonData.map(row => ({
-          name: String(row[firstColumn]),
-          ...numericalColumns.reduce((acc, col) => ({
-            ...acc,
-            [col]: Number(row[col])
-          }), {})
-        }))
+        console.log('Detected numerical columns:', detectedNumericalColumns)
+        console.log('First row raw data:', jsonData[0])
 
+        const chartData = jsonData.map((row, index) => {
+          const transformedRow: ChartData = {
+            name: String(row[firstColumn]),
+          }
+          detectedNumericalColumns.forEach(col => {
+            const value = row[col]
+            transformedRow[col] = typeof value === 'number' ? value : Number(value)
+            console.log(`Row ${index + 1}, ${col}: ${value} -> ${transformedRow[col]}`)
+          })
+          return transformedRow
+        })
+
+        console.log('Final chart data:', JSON.stringify(chartData, null, 2))
         setData(chartData)
+        setNumericalColumns(detectedNumericalColumns)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         alert('Error parsing Excel file: ' + message)
@@ -120,19 +158,31 @@ function App() {
                 <LineChart data={data}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
-                  <YAxis />
+                  <YAxis domain={['auto', 'auto']} />
                   <Tooltip />
-                  {Object.keys(data[0] || {})
-                    .filter(key => key !== 'name')
-                    .map((key, index) => (
+                  <Legend />
+                  {numericalColumns.map((key, index) => {
+                    const colorSets = [
+                      ['#1e3a8a', '#2563eb', '#3b82f6', '#0d9488', '#67e8f9'], // Blues and Teals
+                      ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#c7d2fe'], // Blues to Purple
+                      ['#fef3c7', '#e0f2fe', '#bfdbfe', '#ddd6fe', '#fce7f3'], // Warm Neutrals
+                      ['#f87171', '#fcd34d', '#fef08a', '#86efac', '#67e8f9'], // Warm to Cool
+                      ['#7c3aed', '#f87171', '#facc15', '#10b981', '#f97316']  // Vibrant Mix
+                    ];
+                    const colorSet = Math.floor(index / 5); // Determine which color set to use
+                    const colorIndex = index % 5; // Determine which color within the set to use
+                    return (
                       <Line
                         key={key}
                         type="monotone"
                         dataKey={key}
                         name={key}
-                        stroke={['#3B82F6', '#22C55E', '#F97316', '#A855F7'][index]}
+                        stroke={colorSets[colorSet][colorIndex]}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
                       />
-                    ))}
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -163,10 +213,20 @@ function App() {
             <h3 className="text-lg font-semibold mb-4">Information</h3>
             <div className="space-y-4">
               <div>
-                <h4 className="font-medium mb-2">Color Palette</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  {['bg-blue-500', 'bg-green-500', 'bg-orange-500', 'bg-purple-500'].map((color, i) => (
-                    <div key={i} className={`${color} h-8 rounded`}></div>
+                <h4 className="font-medium mb-2">Color Palettes</h4>
+                <div className="space-y-2">
+                  {[
+                    ['bg-blue-900', 'bg-blue-600', 'bg-blue-500', 'bg-teal-600', 'bg-cyan-300'], // Blues and Teals
+                    ['bg-blue-900', 'bg-blue-500', 'bg-blue-400', 'bg-blue-300', 'bg-indigo-200'], // Blues to Purple
+                    ['bg-amber-50', 'bg-blue-50', 'bg-blue-100', 'bg-purple-100', 'bg-pink-100'], // Warm Neutrals
+                    ['bg-red-400', 'bg-orange-300', 'bg-yellow-200', 'bg-green-300', 'bg-cyan-300'], // Warm to Cool
+                    ['bg-violet-600', 'bg-red-400', 'bg-yellow-400', 'bg-emerald-500', 'bg-orange-500'] // Vibrant Mix
+                  ].map((palette, i) => (
+                    <div key={i} className="grid grid-cols-5 gap-2">
+                      {palette.map((color, j) => (
+                        <div key={j} className={`${color} h-8 rounded`}></div>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>

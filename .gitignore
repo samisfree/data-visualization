@@ -1,4 +1,4 @@
-# Logs
+# Node.js / React
 logs
 *.log
 npm-debug.log*
@@ -22,3 +22,59 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Python environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python testing
+.pytest_cache/
+.coverage
+.coverage.*
+.tox/
+.nox/
+htmlcov/
+.hypothesis/
+cover/
+
+# Python tools and IDEs
+.pytype/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pybuilder/
+.ipynb_checkpoints
+cython_debug/

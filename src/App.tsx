@@ -24,6 +24,7 @@ interface ChartData {
 function App() {
   const [data, setData] = useState<ChartData[]>([])
   const [numericalColumns, setNumericalColumns] = useState<string[]>([])
+  const [selectedColorSet, setSelectedColorSet] = useState<number>(0)
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -169,15 +170,14 @@ function App() {
                       ['#f87171', '#fcd34d', '#fef08a', '#86efac', '#67e8f9'], // Warm to Cool
                       ['#7c3aed', '#f87171', '#facc15', '#10b981', '#f97316']  // Vibrant Mix
                     ];
-                    const colorSet = Math.floor(index / 5); // Determine which color set to use
-                    const colorIndex = index % 5; // Determine which color within the set to use
+                    const colorIndex = index % 5; // Use modulo to cycle through colors
                     return (
                       <Line
                         key={key}
                         type="monotone"
                         dataKey={key}
                         name={key}
-                        stroke={colorSets[colorSet][colorIndex]}
+                        stroke={colorSets[selectedColorSet][colorIndex]}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
                       />
@@ -222,7 +222,15 @@ function App() {
                     ['bg-red-400', 'bg-orange-300', 'bg-yellow-200', 'bg-green-300', 'bg-cyan-300'], // Warm to Cool
                     ['bg-violet-600', 'bg-red-400', 'bg-yellow-400', 'bg-emerald-500', 'bg-orange-500'] // Vibrant Mix
                   ].map((palette, i) => (
-                    <div key={i} className="grid grid-cols-5 gap-2">
+                    <div
+                      key={i}
+                      className={`grid grid-cols-5 gap-2 cursor-pointer p-1 transition-all duration-200 ${
+                        selectedColorSet === i ? 'ring-2 ring-blue-500 rounded' : ''
+                      }`}
+                      onClick={() => setSelectedColorSet(i)}
+                      role="button"
+                      aria-label={`Color palette ${i + 1}`}
+                    >
                       {palette.map((color, j) => (
                         <div key={j} className={`${color} h-8 rounded`}></div>
                       ))}

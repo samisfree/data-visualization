@@ -1,5 +1,5 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Upload, User } from 'lucide-react'
+import { Upload, User, BarChart3, GitGraph } from 'lucide-react'
 import { useState, ChangeEvent } from 'react'
 import { read, utils } from 'xlsx'
 import {
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { EntityGraph } from './components/EntityGraph'
 
 interface ExcelRow {
   [key: string]: string | number | Date
@@ -25,6 +26,15 @@ function App() {
   const [data, setData] = useState<ChartData[]>([])
   const [numericalColumns, setNumericalColumns] = useState<string[]>([])
   const [selectedColorSet, setSelectedColorSet] = useState<number>(0)
+  const [chartType, setChartType] = useState<'line' | 'entity'>('line')
+
+  const colorSets = [
+    ['#1e3a8a', '#2563eb', '#3b82f6', '#0d9488', '#67e8f9'], // Blues and Teals
+    ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#c7d2fe'], // Blues to Purple
+    ['#fef3c7', '#e0f2fe', '#bfdbfe', '#ddd6fe', '#fce7f3'], // Warm Neutrals
+    ['#f87171', '#fcd34d', '#fef08a', '#86efac', '#67e8f9'], // Warm to Cool
+    ['#7c3aed', '#f87171', '#facc15', '#10b981', '#f97316']  // Vibrant Mix
+  ];
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -154,36 +164,54 @@ function App() {
       <main className="container mx-auto grid grid-cols-12 gap-6 p-6">
         <div className="col-span-8">
           <Card className="p-6">
+            <div className="flex gap-2 mb-4">
+              <Button
+                variant={chartType === 'line' ? 'default' : 'outline'}
+                onClick={() => setChartType('line')}
+                className="flex items-center"
+              >
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Line Chart
+              </Button>
+              <Button
+                variant={chartType === 'entity' ? 'default' : 'outline'}
+                onClick={() => setChartType('entity')}
+                className="flex items-center"
+              >
+                <GitGraph className="mr-2 h-4 w-4" />
+                Entity Graph
+              </Button>
+            </div>
             <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis domain={['auto', 'auto']} />
-                  <Tooltip />
-                  <Legend />
-                  {numericalColumns.map((key, index) => {
-                    const colorSets = [
-                      ['#1e3a8a', '#2563eb', '#3b82f6', '#0d9488', '#67e8f9'], // Blues and Teals
-                      ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#c7d2fe'], // Blues to Purple
-                      ['#fef3c7', '#e0f2fe', '#bfdbfe', '#ddd6fe', '#fce7f3'], // Warm Neutrals
-                      ['#f87171', '#fcd34d', '#fef08a', '#86efac', '#67e8f9'], // Warm to Cool
-                      ['#7c3aed', '#f87171', '#facc15', '#10b981', '#f97316']  // Vibrant Mix
-                    ];
-                    const colorIndex = index % 5; // Use modulo to cycle through colors
-                    return (
-                      <Line
-                        key={key}
-                        type="monotone"
-                        dataKey={key}
-                        name={key}
-                        stroke={colorSets[selectedColorSet][colorIndex]}
-                        dot={{ r: 4 }}
-                        activeDot={{ r: 6 }}
-                      />
-                    );
-                  })}
-                </LineChart>
+                {chartType === 'line' ? (
+                  <LineChart data={data}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis domain={['auto', 'auto']} />
+                    <Tooltip />
+                    <Legend />
+                    {numericalColumns.map((key, index) => {
+                      const colorIndex = index % 5; // Use modulo to cycle through colors
+                      return (
+                        <Line
+                          key={key}
+                          type="monotone"
+                          dataKey={key}
+                          name={key}
+                          stroke={colorSets[selectedColorSet][colorIndex]}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                ) : (
+                  <EntityGraph
+                    data={data}
+                    selectedColors={colorSets[selectedColorSet]}
+                  />
+                )}
               </ResponsiveContainer>
             </div>
           </Card>

@@ -22,6 +22,16 @@ interface ChartData {
   [key: string]: string | number
 }
 
+// Helper function to check if a value is numerical
+const isNumerical = (value: any): boolean => {
+  if (typeof value === 'number') return true;
+  if (typeof value === 'string') {
+    const num = Number(value);
+    return !isNaN(num);
+  }
+  return false;
+}
+
 function App() {
   const [data, setData] = useState<ChartData[]>([])
   const [numericalColumns, setNumericalColumns] = useState<string[]>([])
@@ -135,7 +145,10 @@ function App() {
               name: String(row[firstColumn])
             }
             nonNumericalColumns.forEach(col => {
-              transformedRow[col] = String(row[col])
+              const value = row[col]
+              if (!isNumerical(value)) {
+                transformedRow[col] = String(value)
+              }
             })
             return transformedRow
           })
@@ -206,45 +219,58 @@ function App() {
             </div>
             <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                {chartType === 'line' && data.length > 0 ? (
-                  numericalColumns.length > 0 ? (
-                    <LineChart data={data}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={['auto', 'auto']} />
-                      <Tooltip />
-                      <Legend />
-                      {numericalColumns.map((key, index) => {
-                        const colorIndex = index % 5; // Use modulo to cycle through colors
-                        return (
-                          <Line
-                            key={key}
-                            type="monotone"
-                            dataKey={key}
-                            name={key}
-                            stroke={colorSets[selectedColorSet][colorIndex]}
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 6 }}
-                          />
-                        );
-                      })}
-                    </LineChart>
+                {chartType === 'line' ? (
+                  data.length > 0 ? (
+                    numericalColumns.length > 0 ? (
+                      <LineChart data={data}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis domain={['auto', 'auto']} />
+                        <Tooltip />
+                        <Legend />
+                        {numericalColumns.map((key, index) => {
+                          const colorIndex = index % 5; // Use modulo to cycle through colors
+                          return (
+                            <Line
+                              key={key}
+                              type="monotone"
+                              dataKey={key}
+                              name={key}
+                              stroke={colorSets[selectedColorSet][colorIndex]}
+                              dot={{ r: 4 }}
+                              activeDot={{ r: 6 }}
+                            />
+                          );
+                        })}
+                      </LineChart>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-gray-500">No numerical data available for line chart</p>
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center justify-center h-full">
-                      <p className="text-gray-500">No numerical data available for line chart</p>
+                      <p className="text-gray-500">Upload an Excel file to generate line chart</p>
                     </div>
                   )
-                ) : chartType === 'entity' && data.length > 0 ? (
-                  <EntityGraph
-                    data={data}
-                    selectedColors={colorSets[selectedColorSet]}
-                  />
                 ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-gray-500">
-                      Upload an Excel file to generate {chartType === 'line' ? 'line chart' : 'entity graph'}
-                    </p>
-                  </div>
+                  // Entity graph rendering
+                  data.length > 0 ? (
+                    Object.keys(data[0]).some(key => !isNumerical(data[0][key])) ? (
+                      <EntityGraph
+                        data={data}
+                        selectedColors={colorSets[selectedColorSet]}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-gray-500">No non-numerical data available for entity graph</p>
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-gray-500">Upload an Excel file to generate entity graph</p>
+                    </div>
+                  )
                 )}
               </ResponsiveContainer>
             </div>

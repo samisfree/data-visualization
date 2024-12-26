@@ -98,8 +98,8 @@ function App() {
           return isNumeric
         })
 
-        console.log('Detected numerical columns:', detectedNumericalColumns)
-        console.log('First row raw data:', jsonData[0])
+        const nonNumericalColumns = columns.filter(col => !detectedNumericalColumns.includes(col))
+        console.log('Non-numerical columns:', nonNumericalColumns)
 
         if (chartType === 'line') {
           // Validate numerical columns for line chart only
@@ -124,8 +124,12 @@ function App() {
           setData(chartData)
           setNumericalColumns(detectedNumericalColumns)
         } else {
-          // Process data for entity graph - use all non-numerical columns
-          const nonNumericalColumns = columns.filter(col => !detectedNumericalColumns.includes(col))
+          // Process data for entity graph - use only non-numerical columns
+          if (nonNumericalColumns.length === 0) {
+            alert('No non-numerical columns found for entity graph')
+            return
+          }
+
           const chartData = jsonData.map(row => {
             const transformedRow: ChartData = {
               name: String(row[firstColumn])

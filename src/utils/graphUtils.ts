@@ -18,12 +18,27 @@ export function processExcelData(data: any[], selectedColors: string[]): Process
   const nodes = new Map<string, Node>();
   const edges: Edge[] = [];
 
+  // Helper function to check if a value is numerical
+  const isNumerical = (value: any): boolean => {
+    if (typeof value === 'number') return true;
+    if (typeof value === 'string') {
+      const num = Number(value);
+      return !isNaN(num);
+    }
+    return false;
+  };
+
   // Process each row
   data.forEach(row => {
     const rowNodes: string[] = [];
 
     // Process each column
     Object.entries(row).forEach(([column, value], columnIndex) => {
+      // Skip numerical values
+      if (isNumerical(value)) {
+        return;
+      }
+
       const strValue = String(value);
 
       // Add node if not exists (deduplication)
@@ -38,7 +53,7 @@ export function processExcelData(data: any[], selectedColors: string[]): Process
       rowNodes.push(strValue);
     });
 
-    // Create edges between nodes in same row
+    // Create edges between non-numerical nodes in same row
     for (let i = 0; i < rowNodes.length; i++) {
       for (let j = i + 1; j < rowNodes.length; j++) {
         edges.push({

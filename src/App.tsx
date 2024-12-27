@@ -46,113 +46,90 @@ function App() {
     }
 
     const reader = new FileReader()
-    reader.onload = (e: ProgressEvent<FileReader>) => {
+    reader.onload = async (e) => {
       try {
-        const result = e.target?.result
-        if (!result || typeof result !== 'object') {
-          throw new Error('Invalid file content')
-        }
+        const data = e.target?.result
+        console.log('File read successfully')
 
-        const workbook = read(result, { type: 'array' })
+        const workbook = read(data, { type: 'binary' })
+        console.log('Workbook loaded:', workbook.SheetNames)
+
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-        const jsonData = utils.sheet_to_json<ExcelRow>(firstSheet)
+        const jsonData = utils.sheet_to_json(firstSheet)
+        console.log('First row data:', jsonData[0])
 
-        if (!jsonData || jsonData.length === 0) {
-          alert('Excel file is empty')
+        if (jsonData.length === 0) {
+          console.error('No data found in Excel file')
           return
         }
 
         const columns = Object.keys(jsonData[0])
-        console.log('All columns:', columns)
-        const firstColumn = columns[0]
-
-        const isDateColumn = (col: string) => {
-          const values = jsonData.map(row => row[col])
-          console.log(`Checking if ${col} is a date column. Values:`, values)
-
-          // Check if values are sequential numbers AND in Excel date range (typically > 40000)
-          const isSequential = values.every((val, i, arr) => {
-            if (i === 0) return true
-            const diff = Number(val) - Number(arr[i - 1])
-            const isSeq = !isNaN(diff) && diff === 1
-            console.log(`${col}: diff between ${val} and ${arr[i-1]} is ${diff}, isSequential: ${isSeq}`)
-            return isSeq
-          })
-
-          // Check if values are in Excel date range (typically > 40000)
-          const isInDateRange = values.every(val => Number(val) > 40000)
-
-          const isDate = isSequential && isInDateRange
-          console.log(`${col}: isSequential: ${isSequential}, isInDateRange: ${isInDateRange}, final isDate: ${isDate}`)
-          return isDate
-        }
+        console.log('Detected columns:', columns)
 
         const detectedNumericalColumns = columns.filter(col => {
-          if (col === '出生日期' || isDateColumn(col)) {
-            console.log(`${col} excluded: date column`)
-            return false
-          }
           const value = jsonData[0][col]
           const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
-          console.log(`${col}: first value ${value}, type ${typeof value}, isNumeric: ${isNumeric}`)
+          console.log(`Column ${col}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
           return isNumeric
         })
 
-        const nonNumericalColumns = columns.filter(col => !detectedNumericalColumns.includes(col))
-        console.log('Non-numerical columns:', nonNumericalColumns)
+        console.log('Detected numerical columns:', detectedNumericalColumns)
 
         if (chartType === 'line') {
-          // Validate numerical columns for line chart only
           if (detectedNumericalColumns.length === 0) {
-            alert('No numerical columns found for line chart')
+            console.error('No numerical columns found for line chart')
             return
           }
 
-          // Process data for line chart
+          const firstColumn = columns[0]
+          console.log('Using first column as X-axis:', firstColumn)
+
           const chartData = jsonData.map((row, index) => {
             const transformedRow: ChartData = {
-              name: String(row[firstColumn])
+              name: String(row[firstColumn]),
             }
             detectedNumericalColumns.forEach(col => {
               const value = row[col]
               transformedRow[col] = typeof value === 'number' ? value : Number(value)
-              console.log(`Row ${index + 1}, ${col}: ${value} -> ${transformedRow[col]}`)
+              console.log(`Row ${index}, ${col}: ${value} -> ${transformedRow[col]}`)
             })
             return transformedRow
           })
 
+          console.log('Final chart data:', chartData)
           setData(chartData)
           setNumericalColumns(detectedNumericalColumns)
         } else {
-          // Process data for entity graph - use only non-numerical columns
-          if (nonNumericalColumns.length === 0) {
-            alert('No non-numerical columns found for entity graph')
-            return
-          }
+          // Entity graph processing
+          const nonNumericalColumns = columns.filter(col => {
+            const value = jsonData[0][col]
+            const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
+            return !isNumeric
+          })
 
-          const chartData = jsonData.map(row => {
+          console.log('Non-numerical columns for entity graph:', nonNumericalColumns)
+
+          const chartData = jsonData.map((row, index) => {
             const transformedRow: ChartData = {
-              name: String(row[firstColumn])
+              name: String(row[columns[0]]),
             }
             nonNumericalColumns.forEach(col => {
               const value = row[col]
-              const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
-              if (!isNumeric) {
-                transformedRow[col] = String(value)
-              }
+              transformedRow[col] = String(value)
             })
             return transformedRow
           })
 
+          console.log('Final entity graph data:', chartData)
           setData(chartData)
-          setNumericalColumns([]) // Not used for entity graph
+          setNumericalColumns([])
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        alert('Error parsing Excel file: ' + message)
+        console.error('Error processing Excel file:', error)
       }
     }
-    reader.readAsArrayBuffer(file)
+
+    reader.readAsBinaryString(file)
   }
 
   const handleUploadClick = () => {
@@ -170,15 +147,6 @@ function App() {
               <NavigationMenuList>
                 <NavigationMenuItem>
                   <NavigationMenuLink className="px-4 py-2">Workspace</NavigationMenuLink>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <NavigationMenuLink className="px-4 py-2">Jobs</NavigationMenuLink>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <NavigationMenuLink className="px-4 py-2">Workers</NavigationMenuLink>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <NavigationMenuLink className="px-4 py-2">Post a Job</NavigationMenuLink>
                 </NavigationMenuItem>
               </NavigationMenuList>
             </NavigationMenu>

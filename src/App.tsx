@@ -1,7 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Upload, User, BarChart3, GitGraph } from 'lucide-react'
 import { useState, ChangeEvent } from 'react'
-import { read, utils } from 'xlsx'
+import { read, utils, WorkBook } from 'xlsx'
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator"
 import { EntityGraph } from './components/EntityGraph'
 
 interface ExcelRow {
-  [key: string]: string | number | Date
+  [key: string]: string | number
 }
 
 interface ChartData {
@@ -48,26 +48,27 @@ function App() {
     const reader = new FileReader()
     reader.onload = async (e) => {
       try {
-        const data = e.target?.result
+        const data = e.target?.result as string
         console.log('File read successfully')
 
-        const workbook = read(data, { type: 'binary' })
+        const workbook = read(data, { type: 'binary' }) as WorkBook
         console.log('Workbook loaded:', workbook.SheetNames)
 
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-        const jsonData = utils.sheet_to_json(firstSheet)
+        const jsonData = utils.sheet_to_json<ExcelRow>(firstSheet)
         console.log('First row data:', jsonData[0])
 
-        if (jsonData.length === 0) {
+        if (!jsonData || jsonData.length === 0) {
           console.error('No data found in Excel file')
           return
         }
 
-        const columns = Object.keys(jsonData[0])
+        const firstRow = jsonData[0]
+        const columns = Object.keys(firstRow)
         console.log('Detected columns:', columns)
 
         const detectedNumericalColumns = columns.filter(col => {
-          const value = jsonData[0][col]
+          const value = firstRow[col]
           const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
           console.log(`Column ${col}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
           return isNumeric
@@ -84,14 +85,14 @@ function App() {
           const firstColumn = columns[0]
           console.log('Using first column as X-axis:', firstColumn)
 
-          const chartData = jsonData.map((row, index) => {
+          const chartData = jsonData.map((row: ExcelRow) => {
             const transformedRow: ChartData = {
               name: String(row[firstColumn]),
             }
             detectedNumericalColumns.forEach(col => {
               const value = row[col]
               transformedRow[col] = typeof value === 'number' ? value : Number(value)
-              console.log(`Row ${index}, ${col}: ${value} -> ${transformedRow[col]}`)
+              console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
             })
             return transformedRow
           })
@@ -102,14 +103,14 @@ function App() {
         } else {
           // Entity graph processing
           const nonNumericalColumns = columns.filter(col => {
-            const value = jsonData[0][col]
+            const value = firstRow[col]
             const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
             return !isNumeric
           })
 
           console.log('Non-numerical columns for entity graph:', nonNumericalColumns)
 
-          const chartData = jsonData.map((row, index) => {
+          const chartData = jsonData.map((row: ExcelRow) => {
             const transformedRow: ChartData = {
               name: String(row[columns[0]]),
             }

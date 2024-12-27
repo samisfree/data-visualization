@@ -44,6 +44,7 @@ function App() {
 
   // Helper function to parse numeric values including currency
   const parseNumericValue = (value: string | number): number | null => {
+
     // Handle Excel date serial numbers (typically > 40000)
     if (typeof value === 'number' && value > 40000) {
       return null;
@@ -61,7 +62,8 @@ function App() {
       const num = Number(value.replace(/,/g, ''));
       return isNaN(num) ? null : num;
     }
-    return null;
+    return null;    
+
   }
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -104,8 +106,10 @@ function App() {
           }
           const value = firstDataRow[index]
           const parsedValue = parseNumericValue(value)
+
           const isNumeric = parsedValue !== null && parsedValue <= 50000;
           console.log(`Column ${col}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}, parsedValue=${parsedValue}`)
+
           return isNumeric
         })
 
@@ -119,6 +123,7 @@ function App() {
 
           const firstColumn = columns[0]
           console.log('Using first column as X-axis:', firstColumn)
+
 
           const chartData = jsonData.slice(1)
             .filter((row: ExcelData) => {
@@ -143,15 +148,19 @@ function App() {
                 detectedNumericalColumns.forEach(col => {
                   const colIndex = columns.indexOf(col)
                   if (colIndex !== -1) {
+
                     const value = row[colIndex]
                     const parsedValue = parseNumericValue(value)
                     if (parsedValue !== null) {
                       transformedRow[col] = parsedValue
+
                       console.log(`Row data: ${col}=${value} -> ${parsedValue} (within expected range: ${parsedValue <= 200})`)
+
                     } else {
                       console.warn(`Failed to parse numeric value for ${col}: ${value}`)
                       transformedRow[col] = 0
                     }
+
                   }
                 })
                 return transformedRow
@@ -161,6 +170,7 @@ function App() {
               }
             })
             .filter((row): row is ChartData => row !== null)
+
 
           console.log('Final chart data:', chartData)
           console.log('Number of data points:', chartData.length)

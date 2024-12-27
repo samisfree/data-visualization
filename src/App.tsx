@@ -112,10 +112,13 @@ function App() {
 
           const chartData = jsonData.slice(1).map((row: ExcelData) => {
             try {
+              const xValue = row[0];
               const transformedRow: ChartData = {
-                name: typeof row[0] === 'number' && columns[0].includes('日期')
-                  ? excelDateToISO(row[0])
-                  : String(row[0]),
+                name: typeof xValue === 'number' && columns[0].includes('日期')
+                  ? excelDateToISO(xValue)
+                  : typeof xValue === 'undefined' || xValue === null
+                    ? ''  // Provide empty string instead of undefined
+                    : String(xValue),
               }
               detectedNumericalColumns.forEach(col => {
                 const colIndex = columns.indexOf(col)

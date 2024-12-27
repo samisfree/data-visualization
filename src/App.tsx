@@ -1,7 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Upload, User, BarChart3, GitGraph } from 'lucide-react'
 import { useState, ChangeEvent } from 'react'
-import { read, utils } from 'xlsx'
+import { read, utils, WorkBook } from 'xlsx'
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator"
 import { EntityGraph } from './components/EntityGraph'
 
 interface ExcelRow {
-  [key: string]: string | number | Date
+  [key: string]: string | number
 }
 
 interface ChartData {
@@ -22,15 +22,7 @@ interface ChartData {
   [key: string]: string | number
 }
 
-// Helper function to check if a value is numerical
-const isNumerical = (value: any): boolean => {
-  if (typeof value === 'number') return true;
-  if (typeof value === 'string') {
-    const num = Number(value);
-    return !isNaN(num);
-  }
-  return false;
-}
+type ExcelData = (string | number)[]
 
 function App() {
   const [data, setData] = useState<ChartData[]>([])
@@ -56,111 +48,95 @@ function App() {
     }
 
     const reader = new FileReader()
-    reader.onload = (e: ProgressEvent<FileReader>) => {
+    reader.onload = async (e) => {
       try {
-        const result = e.target?.result
-        if (!result || typeof result !== 'object') {
-          throw new Error('Invalid file content')
-        }
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        console.log('File read successfully')
 
-        const workbook = read(result, { type: 'array' })
+        const workbook = read(data, { type: 'array' }) as WorkBook
+        console.log('Workbook loaded:', workbook.SheetNames)
+
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-        const jsonData = utils.sheet_to_json<ExcelRow>(firstSheet)
+        const jsonData = utils.sheet_to_json<ExcelData>(firstSheet, { header: 1 })
+        console.log('First row data:', jsonData[0])
 
-        if (!jsonData || jsonData.length === 0) {
-          alert('Excel file is empty')
+        if (!jsonData || jsonData.length < 2) {
+          console.error('No data found in Excel file')
           return
         }
 
-        const columns = Object.keys(jsonData[0])
-        console.log('All columns:', columns)
-        const firstColumn = columns[0]
+        const headers = jsonData[0].map(String)
+        const columns = headers
+        console.log('Detected columns:', columns)
 
-        const isDateColumn = (col: string) => {
-          const values = jsonData.map(row => row[col])
-          console.log(`Checking if ${col} is a date column. Values:`, values)
-
-          // Check if values are sequential numbers AND in Excel date range (typically > 40000)
-          const isSequential = values.every((val, i, arr) => {
-            if (i === 0) return true
-            const diff = Number(val) - Number(arr[i - 1])
-            const isSeq = !isNaN(diff) && diff === 1
-            console.log(`${col}: diff between ${val} and ${arr[i-1]} is ${diff}, isSequential: ${isSeq}`)
-            return isSeq
-          })
-
-          // Check if values are in Excel date range (typically > 40000)
-          const isInDateRange = values.every(val => Number(val) > 40000)
-
-          const isDate = isSequential && isInDateRange
-          console.log(`${col}: isSequential: ${isSequential}, isInDateRange: ${isInDateRange}, final isDate: ${isDate}`)
-          return isDate
-        }
-
-        const detectedNumericalColumns = columns.filter(col => {
-          if (col === '出生日期' || isDateColumn(col)) {
-            console.log(`${col} excluded: date column`)
-            return false
-          }
-          const value = jsonData[0][col]
+        const firstDataRow = jsonData[1]
+        const detectedNumericalColumns = columns.filter((_, index) => {
+          const value = firstDataRow[index]
           const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
-          console.log(`${col}: first value ${value}, type ${typeof value}, isNumeric: ${isNumeric}`)
+          console.log(`Column ${columns[index]}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
           return isNumeric
         })
 
-        const nonNumericalColumns = columns.filter(col => !detectedNumericalColumns.includes(col))
-        console.log('Non-numerical columns:', nonNumericalColumns)
+        console.log('Detected numerical columns:', detectedNumericalColumns)
 
         if (chartType === 'line') {
-          // Validate numerical columns for line chart only
           if (detectedNumericalColumns.length === 0) {
-            alert('No numerical columns found for line chart')
+            console.error('No numerical columns found for line chart')
             return
           }
 
-          // Process data for line chart
-          const chartData = jsonData.map((row, index) => {
+          const firstColumn = columns[0]
+          console.log('Using first column as X-axis:', firstColumn)
+
+          const chartData = jsonData.slice(1).map((row: ExcelData) => {
             const transformedRow: ChartData = {
-              name: String(row[firstColumn])
+              name: String(row[0]),
             }
             detectedNumericalColumns.forEach(col => {
-              const value = row[col]
-              transformedRow[col] = typeof value === 'number' ? value : Number(value)
-              console.log(`Row ${index + 1}, ${col}: ${value} -> ${transformedRow[col]}`)
-            })
-            return transformedRow
-          })
-
-          setData(chartData)
-          setNumericalColumns(detectedNumericalColumns)
-        } else {
-          // Process data for entity graph - use only non-numerical columns
-          if (nonNumericalColumns.length === 0) {
-            alert('No non-numerical columns found for entity graph')
-            return
-          }
-
-          const chartData = jsonData.map(row => {
-            const transformedRow: ChartData = {
-              name: String(row[firstColumn])
-            }
-            nonNumericalColumns.forEach(col => {
-              const value = row[col]
-              if (!isNumerical(value)) {
-                transformedRow[col] = String(value)
+              const colIndex = columns.indexOf(col)
+              if (colIndex !== -1) {
+                const value = row[colIndex]
+                transformedRow[col] = typeof value === 'number' ? value : Number(value)
+                console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
               }
             })
             return transformedRow
           })
 
+          console.log('Final chart data:', chartData)
           setData(chartData)
-          setNumericalColumns([]) // Not used for entity graph
+          setNumericalColumns(detectedNumericalColumns)
+        } else {
+          const nonNumericalColumns = columns.filter((_, index) => {
+            const value = firstDataRow[index]
+            const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
+            return !isNumeric
+          })
+
+          console.log('Non-numerical columns for entity graph:', nonNumericalColumns)
+
+          const chartData = jsonData.slice(1).map((row: ExcelData) => {
+            const transformedRow: ChartData = {
+              name: String(row[0]),
+            }
+            nonNumericalColumns.forEach(col => {
+              const colIndex = columns.indexOf(col)
+              if (colIndex !== -1) {
+                transformedRow[col] = String(row[colIndex])
+              }
+            })
+            return transformedRow
+          })
+
+          console.log('Final entity graph data:', chartData)
+          setData(chartData)
+          setNumericalColumns([])
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        alert('Error parsing Excel file: ' + message)
+        console.error('Error processing Excel file:', error)
       }
     }
+
     reader.readAsArrayBuffer(file)
   }
 
@@ -179,15 +155,6 @@ function App() {
               <NavigationMenuList>
                 <NavigationMenuItem>
                   <NavigationMenuLink className="px-4 py-2">Workspace</NavigationMenuLink>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <NavigationMenuLink className="px-4 py-2">Jobs</NavigationMenuLink>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <NavigationMenuLink className="px-4 py-2">Workers</NavigationMenuLink>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <NavigationMenuLink className="px-4 py-2">Post a Job</NavigationMenuLink>
                 </NavigationMenuItem>
               </NavigationMenuList>
             </NavigationMenu>
@@ -256,7 +223,10 @@ function App() {
                 ) : (
                   // Entity graph rendering
                   data.length > 0 ? (
-                    Object.keys(data[0]).some(key => !isNumerical(data[0][key])) ? (
+                    Object.keys(data[0]).some(key => {
+                      const value = data[0][key]
+                      return !(typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value))))
+                    }) ? (
                       <EntityGraph
                         data={data}
                         selectedColors={colorSets[selectedColorSet]}

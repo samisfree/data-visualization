@@ -17,7 +17,8 @@ interface ProcessedGraphData {
 export function processExcelData(data: any[], selectedColors: string[]): ProcessedGraphData {
   const nodes = new Map<string, Node>();
   const edges: Edge[] = [];
-  const firstOccurrenceColumn = new Map<string, string>(); // Track first occurrence column
+  const firstOccurrenceColumn = new Map<string, string>();
+  const categoricalColumns = new Set<string>();
 
   // Helper function to check if a value is numerical
   const isNumerical = (value: any): boolean => {
@@ -29,10 +30,21 @@ export function processExcelData(data: any[], selectedColors: string[]): Process
     return false;
   };
 
-  // First pass: collect all non-numerical values and their first occurrence columns
+  // First pass: identify categorical columns
+  if (data.length > 0) {
+    Object.entries(data[0]).forEach(([column]) => {
+      // Check if column contains mostly non-numerical values
+      const nonNumericalCount = data.filter(row => !isNumerical(row[column])).length;
+      if (nonNumericalCount > data.length * 0.5) {
+        categoricalColumns.add(column);
+      }
+    });
+  }
+
+  // Second pass: collect all categorical values and their first occurrence columns
   data.forEach(row => {
     Object.entries(row).forEach(([column, value]) => {
-      if (!isNumerical(value) && value !== null && value !== undefined && value !== '') {
+      if (categoricalColumns.has(column) && value !== null && value !== undefined && value !== '') {
         const strValue = String(value).trim();
         if (strValue && !firstOccurrenceColumn.has(strValue)) {
           firstOccurrenceColumn.set(strValue, column);
@@ -41,38 +53,36 @@ export function processExcelData(data: any[], selectedColors: string[]): Process
     });
   });
 
-  // Second pass: create nodes and edges
+  // Third pass: create nodes and edges
   data.forEach(row => {
-    const rowNodes: string[] = [];
+    const rowCategories = new Map<string, string>(); // column -> value
 
-    // Process each column
+    // Collect categorical values for this row
     Object.entries(row).forEach(([column, value]) => {
-      if (!isNumerical(value) && value !== null && value !== undefined && value !== '') {
+      if (categoricalColumns.has(column) && value !== null && value !== undefined && value !== '') {
         const strValue = String(value).trim();
-
-        if (strValue && !nodes.has(strValue)) {
-          const firstColumn = firstOccurrenceColumn.get(strValue) || column;
-          const columnIndex = Array.from(firstOccurrenceColumn.values()).indexOf(firstColumn);
-
-          nodes.set(strValue, {
-            id: strValue,
-            color: selectedColors[columnIndex % selectedColors.length],
-            column: firstColumn
-          });
-        }
-
         if (strValue) {
-          rowNodes.push(strValue);
+          rowCategories.set(column, strValue);
+
+          if (!nodes.has(strValue)) {
+            const columnIndex = Array.from(categoricalColumns).indexOf(column);
+            nodes.set(strValue, {
+              id: strValue,
+              color: selectedColors[columnIndex % selectedColors.length],
+              column
+            });
+          }
         }
       }
     });
 
-    // Create edges between non-numerical nodes in same row
-    for (let i = 0; i < rowNodes.length; i++) {
-      for (let j = i + 1; j < rowNodes.length; j++) {
+    // Create edges between categorical values
+    const categories = Array.from(rowCategories.entries());
+    for (let i = 0; i < categories.length; i++) {
+      for (let j = i + 1; j < categories.length; j++) {
         edges.push({
-          source: rowNodes[i],
-          target: rowNodes[j]
+          source: categories[i][1],
+          target: categories[j][1]
         });
       }
     }

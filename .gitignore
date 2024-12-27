@@ -78,3 +78,18 @@ dmypy.json
 .pybuilder/
 .ipynb_checkpoints
 cython_debug/
+# Test artifacts
+playwright-report/
+test-results/
+*.png
+public/test_file.xlsx
+public/mixed_data_test.csv
+debug-*.png
+tc*-failure.png
+test.xlsx
+
+# Python scripts
+scripts/*.py
+
+# Development files
+*.log

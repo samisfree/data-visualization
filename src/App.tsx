@@ -22,6 +22,8 @@ interface ChartData {
   [key: string]: string | number
 }
 
+type ExcelData = (string | number)[]
+
 function App() {
   const [data, setData] = useState<ChartData[]>([])
   const [numericalColumns, setNumericalColumns] = useState<string[]>([])
@@ -48,29 +50,30 @@ function App() {
     const reader = new FileReader()
     reader.onload = async (e) => {
       try {
-        const data = e.target?.result as string
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
         console.log('File read successfully')
 
-        const workbook = read(data, { type: 'binary' }) as WorkBook
+        const workbook = read(data, { type: 'array' }) as WorkBook
         console.log('Workbook loaded:', workbook.SheetNames)
 
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-        const jsonData = utils.sheet_to_json<ExcelRow>(firstSheet)
+        const jsonData = utils.sheet_to_json<ExcelData>(firstSheet, { header: 1 })
         console.log('First row data:', jsonData[0])
 
-        if (!jsonData || jsonData.length === 0) {
+        if (!jsonData || jsonData.length < 2) {
           console.error('No data found in Excel file')
           return
         }
 
-        const firstRow = jsonData[0]
-        const columns = Object.keys(firstRow)
+        const headers = jsonData[0].map(String)
+        const columns = headers
         console.log('Detected columns:', columns)
 
-        const detectedNumericalColumns = columns.filter(col => {
-          const value = firstRow[col]
+        const firstDataRow = jsonData[1]
+        const detectedNumericalColumns = columns.filter((_, index) => {
+          const value = firstDataRow[index]
           const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
-          console.log(`Column ${col}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
+          console.log(`Column ${columns[index]}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
           return isNumeric
         })
 
@@ -85,14 +88,17 @@ function App() {
           const firstColumn = columns[0]
           console.log('Using first column as X-axis:', firstColumn)
 
-          const chartData = jsonData.map((row: ExcelRow) => {
+          const chartData = jsonData.slice(1).map((row: ExcelData) => {
             const transformedRow: ChartData = {
-              name: String(row[firstColumn]),
+              name: String(row[0]),
             }
             detectedNumericalColumns.forEach(col => {
-              const value = row[col]
-              transformedRow[col] = typeof value === 'number' ? value : Number(value)
-              console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
+              const colIndex = columns.indexOf(col)
+              if (colIndex !== -1) {
+                const value = row[colIndex]
+                transformedRow[col] = typeof value === 'number' ? value : Number(value)
+                console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
+              }
             })
             return transformedRow
           })
@@ -101,22 +107,23 @@ function App() {
           setData(chartData)
           setNumericalColumns(detectedNumericalColumns)
         } else {
-          // Entity graph processing
-          const nonNumericalColumns = columns.filter(col => {
-            const value = firstRow[col]
+          const nonNumericalColumns = columns.filter((_, index) => {
+            const value = firstDataRow[index]
             const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
             return !isNumeric
           })
 
           console.log('Non-numerical columns for entity graph:', nonNumericalColumns)
 
-          const chartData = jsonData.map((row: ExcelRow) => {
+          const chartData = jsonData.slice(1).map((row: ExcelData) => {
             const transformedRow: ChartData = {
-              name: String(row[columns[0]]),
+              name: String(row[0]),
             }
             nonNumericalColumns.forEach(col => {
-              const value = row[col]
-              transformedRow[col] = String(value)
+              const colIndex = columns.indexOf(col)
+              if (colIndex !== -1) {
+                transformedRow[col] = String(row[colIndex])
+              }
             })
             return transformedRow
           })
@@ -130,7 +137,7 @@ function App() {
       }
     }
 
-    reader.readAsBinaryString(file)
+    reader.readAsArrayBuffer(file)
   }
 
   const handleUploadClick = () => {

@@ -44,19 +44,24 @@ function App() {
 
   // Helper function to parse numeric values including currency
   const parseNumericValue = (value: string | number): number | null => {
-    if (typeof value === 'number') return value
+    // Handle Excel date serial numbers (typically > 40000)
+    if (typeof value === 'number' && value > 40000) {
+      return null;
+    }
+
+    if (typeof value === 'number') return value;
     if (typeof value === 'string') {
       // Handle currency values (¥)
       if (value.startsWith('￥')) {
-        const numStr = value.slice(1).replace(/,/g, '')
-        const num = Number(numStr)
-        return isNaN(num) ? null : num
+        const numStr = value.slice(1).replace(/,/g, '');
+        const num = Number(numStr);
+        return isNaN(num) ? null : num;
       }
       // Handle regular numbers
-      const num = Number(value.replace(/,/g, ''))
-      return isNaN(num) ? null : num
+      const num = Number(value.replace(/,/g, ''));
+      return isNaN(num) ? null : num;
     }
-    return null
+    return null;
   }
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -91,11 +96,16 @@ function App() {
         console.log('Detected columns:', columns)
 
         const firstDataRow = jsonData[1]
-        const detectedNumericalColumns = columns.filter((_, index) => {
+        const detectedNumericalColumns = columns.filter((col, index) => {
+          // Skip date columns
+          if (col.includes('日期') || col.toLowerCase().includes('date')) {
+            console.log(`Skipping date column: ${col}`);
+            return false;
+          }
           const value = firstDataRow[index]
           const parsedValue = parseNumericValue(value)
-          const isNumeric = parsedValue !== null
-          console.log(`Column ${columns[index]}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
+          const isNumeric = parsedValue !== null && parsedValue <= 50000;
+          console.log(`Column ${col}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}, parsedValue=${parsedValue}`)
           return isNumeric
         })
 
@@ -110,43 +120,56 @@ function App() {
           const firstColumn = columns[0]
           console.log('Using first column as X-axis:', firstColumn)
 
-          const chartData = jsonData.slice(1).map((row: ExcelData) => {
-            try {
-              const xValue = row[0];
-              const transformedRow: ChartData = {
-                name: typeof xValue === 'number' && columns[0].includes('日期')
-                  ? excelDateToISO(xValue)
-                  : typeof xValue === 'undefined' || xValue === null
-                    ? ''  // Provide empty string instead of undefined
-                    : String(xValue),
+          const chartData = jsonData.slice(1)
+            .filter((row: ExcelData) => {
+              // Filter out empty rows or rows with all null/undefined values
+              const isValidRow = row && row.some(value => value !== null && value !== undefined && value !== '');
+              if (!isValidRow) {
+                console.log('Filtering out empty/invalid row:', row);
               }
-              detectedNumericalColumns.forEach(col => {
-                const colIndex = columns.indexOf(col)
-                if (colIndex !== -1) {
-                  try {
+              return isValidRow;
+            })
+            .map((row: ExcelData) => {
+              try {
+                const xValue = row[0];
+                console.log('Processing row with x-value:', xValue);
+                const transformedRow: ChartData = {
+                  name: typeof xValue === 'number' && columns[0].includes('日期')
+                    ? excelDateToISO(xValue)
+                    : typeof xValue === 'undefined' || xValue === null
+                      ? ''
+                      : String(xValue),
+                }
+                detectedNumericalColumns.forEach(col => {
+                  const colIndex = columns.indexOf(col)
+                  if (colIndex !== -1) {
                     const value = row[colIndex]
                     const parsedValue = parseNumericValue(value)
                     if (parsedValue !== null) {
                       transformedRow[col] = parsedValue
-                      console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
+                      console.log(`Row data: ${col}=${value} -> ${parsedValue} (within expected range: ${parsedValue <= 200})`)
                     } else {
                       console.warn(`Failed to parse numeric value for ${col}: ${value}`)
                       transformedRow[col] = 0
                     }
-                  } catch (error) {
-                    console.error(`Error processing column ${col}:`, error)
-                    transformedRow[col] = 0
                   }
-                }
-              })
-              return transformedRow
-            } catch (error) {
-              console.error('Error processing row:', error)
-              return null
-            }
-          }).filter((row): row is ChartData => row !== null)
+                })
+                return transformedRow
+              } catch (error) {
+                console.error('Error processing row:', error)
+                return null
+              }
+            })
+            .filter((row): row is ChartData => row !== null)
 
           console.log('Final chart data:', chartData)
+          console.log('Number of data points:', chartData.length)
+          console.log('Numerical columns with ranges:', detectedNumericalColumns.map(col => {
+            const values = chartData.map(row => Number(row[col])).filter(val => !isNaN(val));
+            const max = Math.max(...values);
+            const min = Math.min(...values);
+            return `${col}: range ${min}-${max}`;
+          }));
           setData(chartData)
           setNumericalColumns(detectedNumericalColumns)
         } else {

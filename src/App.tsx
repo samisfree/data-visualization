@@ -13,10 +13,6 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { EntityGraph } from './components/EntityGraph'
 
-interface ExcelRow {
-  [key: string]: string | number
-}
-
 interface ChartData {
   name: string
   [key: string]: string | number
@@ -37,6 +33,31 @@ function App() {
     ['#f87171', '#fcd34d', '#fef08a', '#86efac', '#67e8f9'], // Warm to Cool
     ['#7c3aed', '#f87171', '#facc15', '#10b981', '#f97316']  // Vibrant Mix
   ];
+
+  // Helper function to convert Excel serial dates to ISO format
+  const excelDateToISO = (serial: number): string => {
+    const utc_days = Math.floor(serial - 25569)
+    const utc_value = utc_days * 86400
+    const date_info = new Date(utc_value * 1000)
+    return date_info.toISOString().split('T')[0]
+  }
+
+  // Helper function to parse numeric values including currency
+  const parseNumericValue = (value: string | number): number | null => {
+    if (typeof value === 'number') return value
+    if (typeof value === 'string') {
+      // Handle currency values (¥)
+      if (value.startsWith('￥')) {
+        const numStr = value.slice(1).replace(/,/g, '')
+        const num = Number(numStr)
+        return isNaN(num) ? null : num
+      }
+      // Handle regular numbers
+      const num = Number(value.replace(/,/g, ''))
+      return isNaN(num) ? null : num
+    }
+    return null
+  }
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -72,7 +93,8 @@ function App() {
         const firstDataRow = jsonData[1]
         const detectedNumericalColumns = columns.filter((_, index) => {
           const value = firstDataRow[index]
-          const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
+          const parsedValue = parseNumericValue(value)
+          const isNumeric = parsedValue !== null
           console.log(`Column ${columns[index]}: value=${value}, type=${typeof value}, isNumeric=${isNumeric}`)
           return isNumeric
         })
@@ -89,19 +111,37 @@ function App() {
           console.log('Using first column as X-axis:', firstColumn)
 
           const chartData = jsonData.slice(1).map((row: ExcelData) => {
-            const transformedRow: ChartData = {
-              name: String(row[0]),
-            }
-            detectedNumericalColumns.forEach(col => {
-              const colIndex = columns.indexOf(col)
-              if (colIndex !== -1) {
-                const value = row[colIndex]
-                transformedRow[col] = typeof value === 'number' ? value : Number(value)
-                console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
+            try {
+              const transformedRow: ChartData = {
+                name: typeof row[0] === 'number' && columns[0].includes('日期')
+                  ? excelDateToISO(row[0])
+                  : String(row[0]),
               }
-            })
-            return transformedRow
-          })
+              detectedNumericalColumns.forEach(col => {
+                const colIndex = columns.indexOf(col)
+                if (colIndex !== -1) {
+                  try {
+                    const value = row[colIndex]
+                    const parsedValue = parseNumericValue(value)
+                    if (parsedValue !== null) {
+                      transformedRow[col] = parsedValue
+                      console.log(`Row data: ${col}=${value} -> ${transformedRow[col]}`)
+                    } else {
+                      console.warn(`Failed to parse numeric value for ${col}: ${value}`)
+                      transformedRow[col] = 0
+                    }
+                  } catch (error) {
+                    console.error(`Error processing column ${col}:`, error)
+                    transformedRow[col] = 0
+                  }
+                }
+              })
+              return transformedRow
+            } catch (error) {
+              console.error('Error processing row:', error)
+              return null
+            }
+          }).filter((row): row is ChartData => row !== null)
 
           console.log('Final chart data:', chartData)
           setData(chartData)
@@ -134,6 +174,7 @@ function App() {
         }
       } catch (error) {
         console.error('Error processing Excel file:', error)
+        alert('Error processing Excel file. Please check the console for details.')
       }
     }
 

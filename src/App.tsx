@@ -22,16 +22,6 @@ interface ChartData {
   [key: string]: string | number
 }
 
-// Helper function to check if a value is numerical
-const isNumerical = (value: any): boolean => {
-  if (typeof value === 'number') return true;
-  if (typeof value === 'string') {
-    const num = Number(value);
-    return !isNaN(num);
-  }
-  return false;
-}
-
 function App() {
   const [data, setData] = useState<ChartData[]>([])
   const [numericalColumns, setNumericalColumns] = useState<string[]>([])
@@ -146,7 +136,8 @@ function App() {
             }
             nonNumericalColumns.forEach(col => {
               const value = row[col]
-              if (!isNumerical(value)) {
+              const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))
+              if (!isNumeric) {
                 transformedRow[col] = String(value)
               }
             })
@@ -256,7 +247,10 @@ function App() {
                 ) : (
                   // Entity graph rendering
                   data.length > 0 ? (
-                    Object.keys(data[0]).some(key => !isNumerical(data[0][key])) ? (
+                    Object.keys(data[0]).some(key => {
+                      const value = data[0][key]
+                      return !(typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value))))
+                    }) ? (
                       <EntityGraph
                         data={data}
                         selectedColors={colorSets[selectedColorSet]}
